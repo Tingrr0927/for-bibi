@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>LINE</title>
+<meta name="theme-color" content="#0a080c">
+<style>
+:root { --p: 4px; --line: #06c755; --chatbg: #8da8cf; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #0a080c; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', 'Helvetica Neue', sans-serif;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+button { font-family: inherit; border: 0; background: none; cursor: pointer; color: inherit; }
+
+/* ---------- 房間（第一人稱、夜晚、景深） ---------- */
+#room { position: fixed; inset: 0; overflow: hidden; background: radial-gradient(ellipse 80% 60% at 18% 8%, rgba(255, 170, 90, .28), transparent 60%), radial-gradient(ellipse 70% 50% at 90% 100%, rgba(60, 40, 70, .55), transparent 70%), linear-gradient(170deg, #1b1418 0%, #0f0b0e 55%, #08070a 100%); }
+.bokeh { position: absolute; border-radius: 50%; filter: blur(var(--b)); opacity: var(--o); animation: drift var(--d) ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translate(var(--dx), var(--dy)); } }
+#screenlight { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse 55% 45% at 50% 55%, rgba(170, 200, 255, .10), transparent 70%); opacity: 0; transition: opacity 1.2s; }
+#screenlight.on { opacity: 1; }
+#grain { position: fixed; inset: -50%; pointer-events: none; opacity: .09; z-index: 30; animation: grain 1s steps(4) infinite;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+@keyframes grain { 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } }
+#vignette { position: fixed; inset: 0; pointer-events: none; z-index: 29; box-shadow: inset 0 0 18vmin 6vmin rgba(0, 0, 0, .85); }
+
+/* ---------- 手機 ---------- */
+#holder { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; perspective: 1400px; z-index: 5; }
+.phone {
+  position: relative; width: var(--pw); height: var(--ph); border-radius: calc(var(--p) * 13); padding: calc(var(--p) * 2.4);
+  background: linear-gradient(140deg, #5a5b61 0%, #26272b 18%, #141416 50%, #2b2c30 85%, #4c4d53 100%);
+  box-shadow: 0 calc(var(--p) * 10) calc(var(--p) * 22) rgba(0, 0, 0, .75), 0 0 0 1px #000, inset 0 0 0 calc(var(--p) * .45) #77787e, inset 0 0 0 calc(var(--p) * 1.1) #0b0b0c;
+  animation: hold 9s ease-in-out infinite; transform-origin: 50% 80%;
+}
+@keyframes hold { 0%, 100% { transform: rotateX(4deg) rotateZ(-1deg) translateY(0); } 50% { transform: rotateX(3deg) rotateZ(.6deg) translateY(calc(var(--p) * -1)); } }
+.phone.buzz { animation: buzz .08s linear 8; }
+@keyframes buzz { 0% { transform: translateX(-1.5px) rotateZ(-.4deg); } 50% { transform: translateX(1.5px) rotateZ(.4deg); } }
+.btn-side { position: absolute; background: linear-gradient(90deg, #2a2b2f, #6a6b70); border-radius: 2px; }
+.btn-side.a { left: calc(var(--p) * -.8); top: 22%; width: calc(var(--p) * .9); height: 7%; }
+.btn-side.b { left: calc(var(--p) * -.8); top: 31%; width: calc(var(--p) * .9); height: 7%; }
+.btn-side.c { right: calc(var(--p) * -.8); top: 26%; width: calc(var(--p) * .9); height: 11%; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: calc(var(--p) * 10.8); overflow: hidden; background: #000; }
+.island { position: absolute; top: calc(var(--p) * 2.6); left: 50%; transform: translateX(-50%); width: 31%; height: calc(var(--p) * 7.6); border-radius: 99px; background: #000; z-index: 20; }
+.glare { position: absolute; inset: 0; z-index: 25; pointer-events: none; border-radius: inherit; background: linear-gradient(118deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 32%, transparent 33%, transparent 100%); }
+
+.status { position: absolute; top: 0; left: 0; right: 0; height: calc(var(--p) * 12.5); z-index: 15; display: flex; align-items: center; justify-content: space-between; padding: calc(var(--p) * 1.5) calc(var(--p) * 8) 0 calc(var(--p) * 9.5); font-size: calc(var(--p) * 3.9); font-weight: 600; color: #fff; transition: color .4s; }
+.status.dark { color: #111; }
+.status .icons { display: flex; gap: calc(var(--p) * 1.4); align-items: center; }
+.status svg { height: calc(var(--p) * 3.2); width: auto; fill: currentColor; }
+
+/* ---------- 鎖定畫面 ---------- */
+#lock { position: absolute; inset: 0; z-index: 10; color: #fff; text-align: center; transition: opacity .5s, transform .5s; filter: brightness(0); }
+#lock.wake { animation: wake 1s ease forwards; }
+@keyframes wake { to { filter: brightness(1); } }
+#lock.gone { opacity: 0; transform: scale(1.08); pointer-events: none; }
+.wall { position: absolute; inset: -10%; background: radial-gradient(ellipse 70% 50% at 30% 20%, #e88a7c, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 70%, #5b4a8f, transparent 65%), radial-gradient(ellipse 80% 60% at 20% 90%, #2b3f6b, transparent 70%), linear-gradient(160deg, #c46b78, #3b2f5c 60%, #1a1f3a); filter: blur(14px) saturate(1.1); }
+.lock-date { position: relative; margin-top: calc(var(--p) * 23); font-size: calc(var(--p) * 4.6); font-weight: 600; opacity: .9; }
+.lock-time { position: relative; font-size: calc(var(--p) * 24); font-weight: 600; line-height: 1; letter-spacing: -.02em; margin-top: calc(var(--p) * .8); text-shadow: 0 2px 20px rgba(0, 0, 0, .15); }
+.notif {
+  position: absolute; left: calc(var(--p) * 3.4); right: calc(var(--p) * 3.4); top: 44%; display: flex; gap: calc(var(--p) * 2.8); align-items: flex-start; text-align: left;
+  padding: calc(var(--p) * 3.2); border-radius: calc(var(--p) * 5.5); background: rgba(245, 245, 250, .55); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  color: #111; opacity: 0; transform: translateY(calc(var(--p) * 6)) scale(.96); transition: opacity .5s, transform .6s cubic-bezier(.2, 1.2, .3, 1); cursor: pointer;
+}
+.notif.show { opacity: 1; transform: none; }
+.notif.show:active { transform: scale(.97); }
+.notif .app { flex: none; width: calc(var(--p) * 10); height: calc(var(--p) * 10); border-radius: calc(var(--p) * 2.4); background: var(--line); display: grid; place-items: center; }
+.notif .app svg { width: 70%; }
+.notif .body { flex: 1; min-width: 0; }
+.notif .top { display: flex; justify-content: space-between; font-size: calc(var(--p) * 3.6); }
+.notif .top b { font-weight: 600; }
+.notif .top span { opacity: .55; font-size: calc(var(--p) * 3.3); }
+.notif .msg { font-size: calc(var(--p) * 3.7); margin-top: calc(var(--p) * .5); }
+.hint { position: absolute; left: 0; right: 0; bottom: calc(var(--p) * 22); font-size: calc(var(--p) * 3.4); opacity: 0; transition: opacity .8s; animation: breathe 2s ease-in-out infinite; }
+.hint.show { opacity: .8; }
+@keyframes breathe { 50% { opacity: .35; } }
+.homebar { position: absolute; bottom: calc(var(--p) * 2); left: 50%; transform: translateX(-50%); width: 36%; height: calc(var(--p) * 1.3); border-radius: 99px; background: #fff; opacity: .9; z-index: 16; }
+.homebar.dark { background: #111; }
+
+/* ---------- LINE 聊天 ---------- */
+#chat { position: absolute; inset: 0; z-index: 8; background: var(--chatbg); display: flex; flex-direction: column; }
+.chat-head { flex: none; padding-top: calc(var(--p) * 12.5); background: var(--chatbg); display: flex; align-items: center; height: calc(var(--p) * 24); padding-left: calc(var(--p) * 3); padding-right: calc(var(--p) * 4); gap: calc(var(--p) * 2); color: #111; }
+.chat-head .back { width: calc(var(--p) * 6); height: calc(var(--p) * 6); }
+.chat-head .name { flex: 1; font-size: calc(var(--p) * 4.6); font-weight: 600; }
+.chat-head .tools { display: flex; gap: calc(var(--p) * 4.4); }
+.chat-head svg { width: calc(var(--p) * 5.4); height: calc(var(--p) * 5.4); stroke: #111; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.msgs { flex: 1; overflow-y: auto; padding: calc(var(--p) * 2) calc(var(--p) * 3) calc(var(--p) * 4); display: flex; flex-direction: column; gap: calc(var(--p) * 2.6); scroll-behavior: smooth; }
+.daychip { align-self: center; background: rgba(0, 0, 0, .14); color: #fff; font-size: calc(var(--p) * 3); padding: calc(var(--p) * .8) calc(var(--p) * 3); border-radius: 99px; margin: calc(var(--p) * 1) 0; }
+.row { display: flex; align-items: flex-end; gap: calc(var(--p) * 1.4); animation: msgin .35s cubic-bezier(.2, 1.2, .3, 1) both; }
+@keyframes msgin { from { opacity: 0; transform: translateY(calc(var(--p) * 3)) scale(.96); } }
+.row.him { align-self: flex-start; }
+.row.me { align-self: flex-end; flex-direction: row-reverse; }
+.avatar { flex: none; align-self: flex-start; width: calc(var(--p) * 9); height: calc(var(--p) * 9); border-radius: 50%; background: linear-gradient(140deg, #6d7f99, #3d4a5f); color: #fff; font-weight: 700; font-size: calc(var(--p) * 4); display: grid; place-items: center; background-size: cover; background-position: center; }
+.bubble { position: relative; max-width: calc(var(--pw) * .58); padding: calc(var(--p) * 2.2) calc(var(--p) * 3.4); border-radius: calc(var(--p) * 4.6); font-size: calc(var(--p) * 4); line-height: 1.42; word-break: break-word; color: #111; }
+.him .bubble { background: #fff; border-top-left-radius: calc(var(--p) * 1.4); }
+.me .bubble { background: #85e249; border-top-right-radius: calc(var(--p) * 1.4); }
+.bubble.big { background: none !important; font-size: calc(var(--p) * 13); padding: 0; line-height: 1.1; }
+.meta { font-size: calc(var(--p) * 2.6); color: rgba(0, 0, 0, .55); line-height: 1.3; white-space: nowrap; }
+.me .meta { text-align: right; }
+.typing { display: flex; gap: calc(var(--p) * 1); padding: calc(var(--p) * 3) calc(var(--p) * 3.6); }
+.typing i { width: calc(var(--p) * 1.6); height: calc(var(--p) * 1.6); border-radius: 50%; background: #b5b5b5; animation: dot 1.1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 30% { transform: translateY(-40%); background: #8a8a8a; } }
+
+.choices { flex: none; background: rgba(255, 255, 255, .96); padding: calc(var(--p) * 3) calc(var(--p) * 3) calc(var(--p) * 2); border-top: 1px solid rgba(0, 0, 0, .08); display: none; }
+.choices.show { display: block; animation: sheet .45s cubic-bezier(.2, 1.1, .3, 1) both; }
+@keyframes sheet { from { transform: translateY(100%); } }
+.choices .tip { text-align: center; font-size: calc(var(--p) * 3.1); color: #888; margin-bottom: calc(var(--p) * 2.4); }
+.choices .opts { display: flex; gap: calc(var(--p) * 2.4); justify-content: center; }
+.opt { padding: calc(var(--p) * 2.6) calc(var(--p) * 4.4); border-radius: 99px; font-size: calc(var(--p) * 3.9); font-weight: 600; border: 1.5px solid var(--line); color: var(--line); background: #fff; white-space: nowrap; transition: transform .15s; }
+.opt:active { transform: scale(.95); }
+.opt.yes { background: var(--line); color: #fff; }
+.opt.runner { position: fixed; z-index: 50; transition: left .32s cubic-bezier(.3, 1.4, .5, 1), top .32s cubic-bezier(.3, 1.4, .5, 1), transform .3s cubic-bezier(.3, 1.6, .5, 1); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+.opt.ghost { display: none; }
+.opt.hop { animation: hop .45s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes hop { 0% { transform: translateY(0) scale(1); } 35% { transform: translateY(-60%) scale(1.15) rotate(-6deg); } 70% { transform: translateY(5%) scale(.95); } 100% { transform: none; } }
+
+.sys-alert { position: absolute; inset: 0; z-index: 18; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .28); opacity: 0; pointer-events: none; transition: opacity .25s; }
+.sys-alert.show { opacity: 1; pointer-events: auto; }
+.sa-card { width: 72%; border-radius: calc(var(--p) * 3.6); overflow: hidden; background: rgba(242, 242, 247, .82); backdrop-filter: blur(30px) saturate(1.8); -webkit-backdrop-filter: blur(30px) saturate(1.8); transform: scale(1.12); transition: transform .3s cubic-bezier(.2, 1.3, .4, 1); text-align: center; color: #000; }
+.sys-alert.show .sa-card { transform: none; }
+.sa-text { padding: calc(var(--p) * 5) calc(var(--p) * 4) calc(var(--p) * 4.4); }
+.sa-title { font-size: calc(var(--p) * 4.3); font-weight: 600; }
+.sa-msg { font-size: calc(var(--p) * 3.4); margin-top: calc(var(--p) * 1.2); line-height: 1.4; white-space: pre-line; }
+.sa-btns { display: flex; border-top: .5px solid rgba(60, 60, 67, .3); }
+.sa-btns button { flex: 1; padding: calc(var(--p) * 3.2) 0; font-size: calc(var(--p) * 4.3); color: #007aff; }
+.sa-btns button + button { border-left: .5px solid rgba(60, 60, 67, .3); }
+.sa-btns button.bold { font-weight: 600; }
+.sa-btns button:active { background: rgba(0, 0, 0, .06); }
+
+.inputbar { flex: none; background: #fff; display: flex; align-items: center; gap: calc(var(--p) * 3); padding: calc(var(--p) * 2.2) calc(var(--p) * 3.4) calc(var(--p) * 8); color: #555; }
+.inputbar svg { width: calc(var(--p) * 5.6); height: calc(var(--p) * 5.6); stroke: #555; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.inputbar .field { flex: 1; background: #f1f2f4; border-radius: 99px; padding: calc(var(--p) * 1.8) calc(var(--p) * 3.4); font-size: calc(var(--p) * 3.7); color: #aaa; }
+
+.toast { position: fixed; z-index: 60; pointer-events: none; color: #fff; font-weight: 700; font-size: 18px; text-shadow: 0 2px 10px rgba(0, 0, 0, .6); animation: toast 1.1s ease-out both; white-space: nowrap; }
+@keyframes toast { 0% { opacity: 0; transform: translate(-50%, 0) scale(.6); } 20% { opacity: 1; transform: translate(-50%, -10px) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -50px); } }
+
+/* ---------- 開場 ---------- */
+#start { position: fixed; inset: 0; z-index: 70; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: rgba(255, 255, 255, .85); transition: opacity 1.4s; cursor: pointer; text-align: center; padding: 24px; }
+#start.gone { opacity: 0; pointer-events: none; }
+#start .t1 { font-size: 15px; letter-spacing: .35em; opacity: .6; }
+#start .t2 { font-size: 22px; letter-spacing: .12em; font-weight: 300; }
+#start .t3 { margin-top: 30px; font-size: 13px; letter-spacing: .3em; opacity: .5; animation: breathe 2s ease-in-out infinite; }
+
+.heart { position: fixed; z-index: 55; pointer-events: none; bottom: -40px; animation: rise var(--d) ease-in forwards; font-size: var(--s); }
+@keyframes rise { to { transform: translate(var(--dx), -115vh) rotate(var(--r)); opacity: .2; } }
+</style>
+</head>
+<body>
+<div id="room"></div>
+<div id="screenlight"></div>
+
+<div id="holder">
+  <div class="phone" id="phone">
+    <div class="btn-side a"></div><div class="btn-side b"></div><div class="btn-side c"></div>
+    <div class="screen">
+      <div class="island"></div>
+      <div class="status" id="status">
+        <span id="sbTime">00:00</span>
+        <span class="icons">
+          <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+          <svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.4 6.8a6.5 6.5 0 0 1 9.2 0l-1.4 1.4a4.5 4.5 0 0 0-6.4 0zM1 4.4a9.9 9.9 0 0 1 14 0l-1.4 1.4a7.9 7.9 0 0 0-11.2 0z"/></svg>
+          <svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="1.6"/><rect x="24" y="4" width="2" height="4" rx="1" opacity=".45"/></svg>
+        </span>
+      </div>
+
+      <div id="lock">
+        <div class="wall"></div>
+        <div class="lock-date" id="lockDate"></div>
+        <div class="lock-time" id="lockTime"></div>
+        <div class="notif" id="notif">
+          <div class="app"><svg viewBox="0 0 40 40"><path fill="#fff" d="M20 6C11.2 6 4 11.8 4 18.9c0 6.4 5.7 11.7 13.3 12.7.5.1 1.2.3 1.4.8.2.4.1 1 .1 1.4l-.2 1.4c-.1.4-.3 1.6 1.4.9 1.7-.7 9.3-5.5 12.7-9.4C35 24.1 36 21.6 36 18.9 36 11.8 28.8 6 20 6z"/></svg></div>
+          <div class="body">
+            <div class="top"><b id="nName">Jerry</b><span>現在</span></div>
+            <div class="msg" id="nMsg"></div>
+          </div>
+        </div>
+        <div class="hint" id="hint">點一下通知打開</div>
+      </div>
+
+      <div id="chat" hidden>
+        <div class="chat-head">
+          <svg class="back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></svg>
+          <div class="name" id="cName">Jerry</div>
+          <div class="tools">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M6.5 3.5h3l1.5 4-2 1.3a10 10 0 0 0 5.2 5.2l1.3-2 4 1.5v3a2 2 0 0 1-2 2A15.5 15.5 0 0 1 4.5 5.5a2 2 0 0 1 2-2z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </div>
+        </div>
+        <div class="msgs" id="msgs"><div class="daychip" id="dayChip">今天</div></div>
+        <div class="choices" id="choices">
+          <div class="tip">要怎麼回他呢？</div>
+          <div class="opts">
+          </div>
+        </div>
+        <div class="inputbar">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 6l1.5-2h4l1.5 2"/></svg>
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></svg>
+          <div class="field">Aa</div>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0"/><path d="M9.5 9.8v.4M14.5 9.8v.4"/></svg>
+        </div>
+      </div>
+
+      <div class="sys-alert" id="sysAlert">
+        <div class="sa-card">
+          <div class="sa-text">
+            <div class="sa-title">要加入行事曆嗎？</div>
+            <div class="sa-msg" id="saMsg"></div>
+          </div>
+          <div class="sa-btns"><button id="saNo">取消</button><button id="saYes" class="bold">加入</button></div>
+        </div>
+      </div>
+      <div class="homebar" id="homebar"></div>
+      <div class="glare"></div>
+    </div>
+  </div>
+</div>
+
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<div id="start">
+  <div class="t1" id="sDate"></div>
+  <div class="t2">晚上，手機突然震了一下⋯⋯</div>
+  <div class="t3">輕觸畫面</div>
+</div>
+
+<script>
+// =====================================================================
+//  劇本：要改文字都改這裡
+// =====================================================================
+const CFG = {
+  him: 'Jerry 吳廷睿',
+  avatar: 'jerry.jpg',              // 你的大頭貼
+  first: '鼻鼻禮拜四就生日囉！我愛尼',
+  // 會亂跑的選項被按的時候跳出來的字
+  tease: ['欸？', '按不到吧 😜', '再想一次嘛', '不可以！', '妳確定？？', '抓不到～', '😤😤😤'],
+  surrenderAt: 9,                   // 被按到第幾次就投降
+
+  // 劇本：照順序演出
+  //   { say: '你傳的訊息' }
+  //   { me: '她自動傳出的訊息' }
+  //   選項加 flip: '新的字' → 第一次按只會變字，再按才送出
+  //   { calendar: { title, when, file } }  跳出「加入行事曆」的系統視窗
+  //   { choice: [ { text: '選項', run: true（會亂跑）, surrender: '投降後變成的字' }, { text: '選項' } ] }
+  //   { hearts: 數量 }
+  script: [
+    { choice: [
+      { text: '我也愛你唷北鼻' },
+      { text: '走開啦煩死了', run: true, surrender: '好啦⋯我也愛你北鼻 ❤️' },
+    ] },
+    { say: '嘿嘿 我就知道 🥹' },
+    { say: '禮拜四晚上把時間留給我好不好' },
+    { choice: [
+      { text: '想幹嘛！', run: true, surrender: '好啦好啦⋯好嘟 🥺' },
+      { text: '好嘟！' },
+    ] },
+    { me: '要去哪裡呀？' },
+    { say: '不要問！打扮的美美的就對嚕！' },
+    { say: '晚上要不要..' },
+    { choice: [
+      { text: '別想', flip: '要..' },          // 按下去先跳一下變成「要..」，再按一次才送出
+      { text: '要要要！' },
+    ] },
+    { say: '沒問題，一定讓妳服服貼貼ㄉ！' },
+    { calendar: {
+      title: '晚上跟北鼻吃飯',
+      when: '10月15日（星期四）晚上 6:00',     // TODO：確認時間
+      file: 'dinner.ics',
+    } },
+  ],
+};
+
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- 時間 ----------
+  // 傳送時間 10/13（二）21:40；當天打開用真實時間，其他天打開就顯示 21:40
+  const SEND_AT = new Date(2026, 9, 13, 21, 40);
+  const real = new Date();
+  const sameDay = real.getMonth() === SEND_AT.getMonth() && real.getDate() === SEND_AT.getDate() && real >= SEND_AT;
+  const now = sameDay ? real : SEND_AT;
+  const hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0');
+  const week = '日一二三四五六'[now.getDay()];
+  const ampm = (now.getHours() < 12 ? '上午' : '下午') + (now.getHours() % 12 || 12) + ':' + mm;
+  $('#sbTime').textContent = `${hh}:${mm}`;
+  $('#lockTime').textContent = `${hh}:${mm}`;
+  $('#lockDate').textContent = `${now.getMonth() + 1}月${now.getDate()}日 星期${week}`;
+  $('#sDate').textContent = `${now.getMonth() + 1} 月 ${now.getDate()} 日　${hh}:${mm}`;
+  $('#dayChip').textContent = `今天 ${now.getMonth() + 1}/${now.getDate()}（${week}）`;
+  $('#nName').textContent = $('#cName').textContent = CFG.him;
+  $('#nMsg').textContent = CFG.first;
+
+  // ---------- 房間的景深光斑 ----------
+  const room = $('#room');
+  const tones = ['255,180,110', '255,210,160', '255,140,90', '150,170,255', '255,230,200'];
+  for (let i = 0; i < 22; i++) {
+    const b = document.createElement('div');
+    const size = rand(4, 22);
+    b.className = 'bokeh';
+    b.style.cssText = `width:${size}vmin;height:${size}vmin;left:${rand(-10, 100)}%;top:${rand(-10, 100)}%;` +
+      `background:radial-gradient(circle, rgba(${tones[i % tones.length]},.9), rgba(${tones[i % tones.length]},.0) 70%);` +
+      `--b:${rand(6, 20)}px;--o:${rand(.12, .45)};--d:${rand(8, 16)}s;--dx:${rand(-3, 3)}vmin;--dy:${rand(-3, 3)}vmin`;
+    room.appendChild(b);
+  }
+
+  // ---------- 手機尺寸 ----------
+  function resize() {
+    const vw = innerWidth, vh = innerHeight;
+    const w = Math.min(vw * 0.94, 430, vh * 0.94 * 0.56);
+    const h = Math.min(vh * 0.94, w / 0.46);
+    const r = document.documentElement.style;
+    r.setProperty('--pw', w + 'px');
+    r.setProperty('--ph', h + 'px');
+    r.setProperty('--p', w / 100 + 'px');
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ---------- 開場 ----------
+  $('#start').addEventListener('click', async () => {
+    $('#start').classList.add('gone');
+    await sleep(900);
+    $('#lock').classList.add('wake');
+    $('#screenlight').classList.add('on');
+    await sleep(1300);
+    $('#notif').classList.add('show');
+    $('#phone').classList.add('buzz');
+    try { navigator.vibrate && navigator.vibrate([180, 90, 180]); } catch (e) {}
+    setTimeout(() => $('#phone').classList.remove('buzz'), 700);
+    await sleep(1400);
+    $('#hint').classList.add('show');
+  }, { once: true });
+
+  // ---------- 打開 LINE ----------
+  $('#notif').addEventListener('click', async () => {
+    $('#chat').hidden = false;
+    $('#lock').classList.add('gone');
+    $('#status').classList.add('dark');
+    $('#homebar').classList.add('dark');
+    await sleep(600);
+    addMsg('him', CFG.first);
+    await sleep(900);
+    await typing(1300);
+    addMsg('him', '🎂', { big: true });
+    await sleep(900);
+    runScript();
+  }, { once: true });
+
+  const msgs = $('#msgs');
+  function scrollDown() { msgs.scrollTop = msgs.scrollHeight; }
+
+  function addMsg(who, text, opt = {}) {
+    const row = document.createElement('div');
+    row.className = 'row ' + who;
+    const bubble = `<div class="bubble${opt.big ? ' big' : ''}"></div>`;
+    if (who === 'him') {
+      const av = CFG.avatar ? `style="background-image:url('${CFG.avatar}')"` : '';
+      row.innerHTML = `<div class="avatar" ${av}>${CFG.avatar ? '' : CFG.him[0]}</div>${bubble}<div class="meta">${ampm}</div>`;
+    } else {
+      row.innerHTML = `${bubble}<div class="meta"><span class="read"></span><br>${ampm}</div>`;
+    }
+    row.querySelector('.bubble').textContent = text;
+    msgs.appendChild(row);
+    scrollDown();
+    return row;
+  }
+
+  async function typing(ms) {
+    const row = document.createElement('div');
+    row.className = 'row him';
+    row.innerHTML = `<div class="avatar">${CFG.him[0]}</div><div class="bubble typing"><i></i><i></i><i></i></div>`;
+    if (CFG.avatar) { const a = row.querySelector('.avatar'); a.textContent = ''; a.style.backgroundImage = `url('${CFG.avatar}')`; }
+    msgs.appendChild(row);
+    scrollDown();
+    await sleep(ms);
+    row.remove();
+  }
+
+  // ---------- 劇本 ----------
+  async function runScript() {
+    for (const st of CFG.script) {
+      if (st.say) {
+        await typing(Math.min(2200, 700 + st.say.length * 90));
+        addMsg('him', st.say);
+        await sleep(500);
+      } else if (st.me) {
+        await sleep(700);
+        const row = addMsg('me', st.me);
+        await sleep(900);
+        row.querySelector('.read').textContent = '已讀';
+        await sleep(500);
+      } else if (st.calendar) {
+        await sleep(1200);
+        askCalendar(st.calendar);
+      } else if (st.hearts) {
+        hearts(st.hearts);
+        await sleep(400);
+      } else if (st.choice) {
+        const text = await ask(st.choice);
+        const row = addMsg('me', text);
+        await sleep(900);
+        row.querySelector('.read').textContent = '已讀';
+        await sleep(500);
+      }
+    }
+  }
+
+  // ---------- 選項（其中一個會逃跑） ----------
+  function toast(x, y, text) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = text;
+    t.style.left = x + 'px';
+    t.style.top = y + 'px';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1200);
+  }
+
+  function jumpAway(el) {
+    const r = el.getBoundingClientRect();
+    const w = r.width, h = r.height, vw = innerWidth, vh = innerHeight;
+    let x, y, n = 0;
+    do {
+      x = rand(12, vw - w - 12);
+      y = rand(60, vh - h - 60);
+      n++;
+    } while (Math.hypot(x - r.left, y - r.top) < Math.min(vw, vh) * 0.35 && n < 20);
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+  }
+
+  let activeRunner = null;
+  addEventListener('resize', () => { if (activeRunner) jumpAway(activeRunner); });
+
+  function ask(options) {
+    return new Promise((resolve) => {
+      const box = $('#choices'), wrap = box.querySelector('.opts');
+      wrap.innerHTML = '';
+      let runner = null, tries = 0, scale = 1, done = false, lastRun = 0;
+
+      const finish = (text) => {
+        if (done) return;
+        done = true;
+        box.classList.remove('show');
+        if (runner) runner.remove();
+        activeRunner = null;
+        resolve(text);
+      };
+
+      options.forEach((o) => {
+        const b = document.createElement('button');
+        b.className = 'opt' + (o.run || o.flip ? '' : ' yes');
+        b.textContent = o.text;
+        wrap.appendChild(b);
+        if (!o.run) {
+          // 只有手指「一開始就按在這顆」才算數，避免按逃跑選項時誤觸到它
+          let armed = false;
+          b.addEventListener('pointerdown', () => { armed = Date.now() - lastRun > 450; });
+          b.addEventListener('pointercancel', () => { armed = false; });
+          let flipped = false;
+          b.addEventListener('click', (e) => {
+            e.preventDefault();
+            const ok = armed && Date.now() - lastRun > 450;
+            armed = false;
+            if (!ok) return;
+            if (o.flip && !flipped) {
+              // 先跳一下、只換字，不送出
+              flipped = true;
+              lastRun = Date.now();
+              b.textContent = o.flip;
+              b.classList.remove('hop'); void b.offsetWidth; b.classList.add('hop');
+              try { navigator.vibrate && navigator.vibrate(20); } catch (err) {}
+              return;
+            }
+            finish(flipped ? o.flip : o.text);
+          });
+          return;
+        }
+
+        const press = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (done) return;
+          lastRun = Date.now();
+          tries++;
+          const r = (runner || b).getBoundingClientRect();
+          const cx = r.left + r.width / 2, cy = r.top;
+
+          if (tries >= CFG.surrenderAt) {
+            // 投降
+            runner.textContent = o.surrender;
+            runner.classList.add('yes');
+            runner.style.transform = 'scale(1.15)';
+            runner.style.left = (innerWidth - runner.offsetWidth) / 2 + 'px';
+            runner.style.top = innerHeight * 0.45 + 'px';
+            runner.onpointerdown = null;
+            runner.onclick = () => { if (Date.now() - lastRun > 450) finish(o.surrender); };
+            activeRunner = null;
+            toast(innerWidth / 2, innerHeight * 0.4, '好啦好啦 🙈');
+            return;
+          }
+
+          if (!runner) {
+            // 第一次：跳到奇怪的位置
+            runner = b.cloneNode(true);
+            runner.classList.add('runner');
+            runner.style.left = r.left + 'px';
+            runner.style.top = r.top + 'px';
+            document.body.appendChild(runner);
+            b.style.visibility = 'hidden';                 // 先保留位置，別讓另一顆滑到手指下面
+            setTimeout(() => b.classList.add('ghost'), 500);
+            runner.onpointerdown = press;
+            runner.onclick = (ev) => ev.preventDefault();
+            activeRunner = runner;
+            requestAnimationFrame(() => requestAnimationFrame(() => jumpAway(runner)));
+          } else if (tries === 2) {
+            // 第二次：突然縮小
+            scale = 0.55;
+            runner.style.transform = `scale(${scale})`;
+          } else {
+            // 之後：一直亂跑，越來越小
+            scale = Math.max(0.32, scale - 0.05);
+            runner.style.transform = `scale(${scale}) rotate(${rand(-25, 25)}deg)`;
+            jumpAway(runner);
+          }
+          toast(cx, cy, CFG.tease[(tries - 1) % CFG.tease.length]);
+          try { navigator.vibrate && navigator.vibrate(30); } catch (err) {}
+        };
+        b.addEventListener('pointerdown', press);
+        b.addEventListener('click', (e) => e.preventDefault());
+      });
+
+      box.classList.add('show');
+      scrollDown();
+    });
+  }
+
+  // ---------- 加入行事曆（仿 iOS 系統視窗，按「加入」會打開真的 iPhone 行事曆） ----------
+  function askCalendar(c) {
+    const box = $('#sysAlert');
+    $('#saMsg').textContent = `「${c.title}」\n${c.when}`;
+    box.classList.add('show');
+    $('#saNo').onclick = () => box.classList.remove('show');
+    $('#saYes').onclick = () => {
+      box.classList.remove('show');
+      location.href = c.file;
+    };
+  }
+
+  // ---------- 愛心 ----------
+  function hearts(n) {
+    const set = ['❤️', '💕', '💖', '💗', '🩷'];
+    for (let i = 0; i < n; i++) {
+      const h = document.createElement('div');
+      h.className = 'heart';
+      h.textContent = set[i % set.length];
+      h.style.cssText = `left:${rand(0, 100)}vw;--s:${rand(18, 40)}px;--d:${rand(3, 6)}s;--dx:${rand(-60, 60)}px;--r:${rand(-40, 40)}deg;animation-delay:${rand(0, 1.5)}s`;
+      document.body.appendChild(h);
+      setTimeout(() => h.remove(), 8000);
+    }
+  }
+})();
+</script>
+</body>
+</html>
